@@ -47,7 +47,6 @@ jobs:
           sparse-checkout: |
             worker.py
             transcoder.py
-            ghassets.py
           sparse-checkout-cone-mode: false
 
       - name: Fast Install FFmpeg
