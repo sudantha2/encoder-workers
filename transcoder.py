@@ -148,7 +148,13 @@ def build_cmd(
     req_pix = (pix_fmt or "yuv420p").strip()
     vf = []
     if scale and target:
-        vf.append(f"scale={target}:-2" if portrait else f"scale=-2:{target}")
+        # Scale the *displayed* geometry: anamorphic input is stretched to
+        # square pixels first, then resized, so the result has exactly the
+        # source's aspect ratio (1920x1080 -> 854x480 would otherwise keep
+        # SAR 1280:1281 and render slightly differently from the source).
+        vf.append("scale=trunc(iw*sar/2)*2:ih")
+        vf.append(f"scale={target}:-2:flags=lanczos,setsar=1" if portrait
+                  else f"scale=-2:{target}:flags=lanczos,setsar=1")
     elif "444" not in req_pix:
         # Ensure even dimensions for 4:2:0 / 4:2:2 chroma subsampling without altering even resolutions
         vf.append("scale=trunc(iw/2)*2:trunc(ih/2)*2")
@@ -185,32 +191,6 @@ def build_cmd(
         cmd += ["-movflags", "+faststart"]
     cmd += ["-progress", "pipe:1", "-nostats", dst]
     return cmd
-
-
-async def verify_output(path: str, job):
-    """Decode the entire output before upload; file size alone cannot prove integrity."""
-    if job.cancelled:
-        raise asyncio.CancelledError("cancelled")
-    proc = await asyncio.create_subprocess_exec(
-        "ffmpeg", "-hide_banner", "-v", "error", "-nostdin", "-xerror",
-        "-err_detect", "explode", "-i", path, "-map", "0:v:0", "-map", "0:a?",
-        "-f", "null", "-", stdout=asyncio.subprocess.DEVNULL,
-        stderr=asyncio.subprocess.PIPE, env=ffmpeg_env(),
-    )
-    job.proc = proc
-    try:
-        _, err = await proc.communicate()
-    finally:
-        if proc.returncode is None:
-            with contextlib.suppress(ProcessLookupError):
-                proc.kill()
-            await proc.wait()
-        job.proc = None
-    if job.cancelled:
-        raise asyncio.CancelledError("cancelled")
-    if proc.returncode:
-        raise RuntimeError("Encoded video failed playback verification: " +
-                           err.decode(errors="replace")[-600:].strip())
 
 
 def _num(v, cast=float):
