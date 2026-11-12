@@ -144,7 +144,9 @@ def build_cmd(
     pix_fmt="yuv420p",
     x265_extra="",
 ):
-    """audio_mode: aac | copy | none     container: mp4 | mkv"""
+    """audio_mode: aac | copy | none     container: mp4 | mkv
+
+    """
     req_pix = (pix_fmt or "yuv420p").strip()
     vf = []
     if scale and target:
